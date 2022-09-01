@@ -11,3 +11,6 @@ def test_chars_fail() -> None:
     with raises(LexerError):
         list(chars)
 
+def test_chars_initial() -> None:
+    chars = Chars("\\ab")
+    assert chars.peek() == "a"
