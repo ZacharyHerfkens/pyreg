@@ -2,10 +2,15 @@
     A simple lexer for tokenizing a regex string.
 
     The tokens are:
-        - 'paren'       a parenthesis '(' or ')'
-        - 'bracket'     a bracket '[' or ']'
-
-        - 'op'          an operator (|, *, +, ?, {n,m})
+        - 'l-paren'     a left parenthesis
+        - 'r-paren'     a right parenthesis
+        - 'l-bracket'   a left bracket
+        - 'r-bracket'   a right bracket
+        
+        - 'or'          the or operator
+        - 'star'        the star operator
+        - 'plus'        the plus operator
+        - 'question'    the question operator
 
         - 'char'        a single character
         - 'class'       a character class ':digit:', ':alpha:', etc.
@@ -97,38 +102,51 @@ class Chars:
 class Lexer(Iterator[Token]):
     """Iterator over the tokens of a regular expression."""
 
+    singles: dict[str, str] = {
+        "(": "l-paren",
+        ")": "r-paren",
+        "[": "l-bracket",
+        "]": "r-bracket",
+        "|": "or",
+        "*": "star",
+        "+": "plus",
+        "?": "question",
+        ".": "dot",
+        "^": "caret",
+    }
+
     def __init__(self, re: str) -> None:
         self.chars: Chars = Chars(re)
         self.current: Token | None = self._next()
-    
+
     def peek(self) -> Token | None:
         """Return the next Token without consuming it"""
         return self.current
-    
+
     def next(self) -> Token | None:
         """Return the next Token and consume it"""
         token = self.current
         self.current = self._next()
         return token
-    
+
     def next_if(self, pred: Callable[[Token], bool]) -> Token | None:
         """Return the next token if it satisfies the predicate or None."""
         token: Token | None = self.peek()
         if token is not None and pred(token):
             return self.next()
         return None
-    
+
     def next_while(self, pred: Callable[[Token], bool]) -> list[Token]:
         """Consume tokens while the predicate is true."""
-        tokens:list[Token] = []
+        tokens: list[Token] = []
         while (token := self.peek()) is not None and pred(token):
             tokens.append(token)
             self.next()
         return tokens
-    
+
     def __iter__(self) -> Iterator[Token]:
         return self
-    
+
     def __next__(self) -> Token:
         """Return the next Token or raise StopIteration"""
         token = self.next()
@@ -149,16 +167,8 @@ class Lexer(Iterator[Token]):
         if char is None:
             return None
 
-        if char in "()":
-            return Token("paren", {"val": char}, self.pos - 1)
-        if char in "[]":
-            return Token("bracket", {"val": char}, self.pos - 1)
-        if char in "*+?|":
-            return Token("op", {"val": char}, self.pos - 1)
-        if char == "^":
-            return Token("caret", {"val": char}, self.pos - 1)
-        if char == ".":
-            return Token("dot", {"val": char}, self.pos - 1)
+        if char in Lexer.singles:
+            return Token(Lexer.singles[char], {}, self.pos - 1)
         if char == "{":
             return self._parse_repeat()
         if char == ":":
@@ -168,7 +178,7 @@ class Lexer(Iterator[Token]):
         if self.chars.peek() == "-":
             return self._parse_range(char)
         return Token("char", {"val": char}, self.pos - 1)
-    
+
     def _parse_repeat(self) -> Token:
         """Parse a repeat token of the form {n,m}"""
         start: int = self.pos - 1
@@ -181,7 +191,7 @@ class Lexer(Iterator[Token]):
             raise LexerError("Expected '}'", self.pos)
 
         return Token("repeat", {"min": min, "max": max}, start)
-    
+
     def _parse_class(self) -> Token:
         """Parse a class token of the form :class:"""
         start: int = self.pos - 1
@@ -190,7 +200,7 @@ class Lexer(Iterator[Token]):
             raise LexerError("Expected ':'", self.pos)
 
         return Token("class", {"val": name}, start)
-    
+
     def _parse_escape(self) -> Token:
         """Parse an escaped character"""
         start: int = self.pos - 1
@@ -198,11 +208,11 @@ class Lexer(Iterator[Token]):
         if char is None:
             raise LexerError("Expected character after '\\'", self.pos)
         return Token("char", {"val": char}, start)
-    
+
     def _parse_range(self, first: str) -> Token:
         """Parse a range token of the form a-z"""
         start: int = self.pos - 1
-        self.chars.next()   # consume the '-'
+        self.chars.next()  # consume the '-'
         last: str | None = self.chars.next()
         if last is None:
             raise LexerError("Expected character after '-'.", self.pos)
