@@ -87,7 +87,7 @@ def _set(lexer: Lexer) -> AST:
     negated: bool = False
     if (tok := lexer.peek()) and tok.type == "caret":
         lexer.next()
-        negated = True
+        negated: bool = True
     
     exprs: list[AST] = []
     while (tok := lexer.next()) and tok.type != "r-bracket":
